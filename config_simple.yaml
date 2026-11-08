@@ -88,6 +88,13 @@ run_settings:
   CF_TYPES: "7"                      # all used in the paper: "1,2,3,4,5,6,7,8,9,10,11,29"
   CF_ITERS: 30
   LAYER_ATTRIBUTION: 1
+  # counties for run_counties.py (calibrate -> run -> SEIRV check, README section 2); --counties overrides it.
+  #   all = every county with populations/pop<FIPS>, data/processed_data/<FIPS> and networks;
+  #   or FIPS codes, e.g. "01031" or "01031 13013" (quoted, or YAML drops the leading zero)
+  COUNTIES: all
+  # dropped from "all": calibration fails for these (spline coefficient box saturates),
+  # so "all" is 151 counties
+  EXCLUDE_COUNTIES: "21179 48091"
 
 simulation_metadata:
   ALIGN_LLM: true

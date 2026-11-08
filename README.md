@@ -65,6 +65,44 @@ Below it are:
 Any `run_settings` key can be overridden for one command from the shell, e.g. `EPOCHS=2 bash calibrate.sh`.
 To use a different config file, run `CONFIG=my_config.yaml bash run.sh`.
 
+### Which counties
+
+The county is not set in the config's model block: `simulation_metadata.POPULATION`, `population_dir` and
+`num_agents` are the template county's (01031), and `main.py <FIPS>` replaces them at run time. Choose the county
+when you launch:
+
+- **One county**: `FIPS=13013 bash calibrate.sh`, then `FIPS=13013 bash run.sh` (default `FIPS=01031`).
+- **Several or all counties**: `run_counties.py` calibrates (section 3), runs (section 4) and SEIRV-checks
+  (section 10) each county in turn. Its list comes from `run_settings.COUNTIES` in the config:
+
+  ```yaml
+  run_settings:
+    EXCLUDE_COUNTIES: "21179 48091"   # left out of "all" (their calibration fails), so "all" is 151 counties
+    COUNTIES: all              # every county with populations/pop<FIPS>, data/processed_data/<FIPS>/<DATE>/
+  #                            #   daily_data.csv and networks (data/networks/covid_output_p0/<FIPS>, else
+  #                            #   $NETWORKS_DIR_FALLBACK/<FIPS>); counties missing one are listed and skipped
+  # COUNTIES: "01031"          # one county, or several: "01031 13013" (quote them, or YAML drops the leading zero)
+  ```
+
+  ```bash
+  .venv/bin/python run_counties.py --config config_simple.yaml --run-name simple           # COUNTIES from the config
+  .venv/bin/python run_counties.py --config config_simple.yaml --run-name simple --counties 13013 17037   # --counties overrides it
+  sbatch --array=0-3 --export=ALL,ARGS="--config config_simple.yaml --run-name simple" run_counties.sbatch
+  ```
+
+  With an sbatch array each task takes every n-th county (`counties[task::n_tasks]`, one GPU each; 4 tasks fill
+  one alrodri-a100 node). Each county takes about 25 min (about 20 min calibration, the rest the 30-iteration
+  factual run and the check), so all 151 counties take about 16 h on 4 GPUs. A county whose calibration or
+  `reference_results_<RUN_NAME>/<FIPS>/seir_rates_daily.csv` already exists skips that step, so a rerun
+  resumes. Outputs per county: the calibration in `result_graphs/<FIPS>/...` (section 3), the run in
+  `results/<FIPS>/<RUN_NAME>/` and the five reference files in `reference_results_<RUN_NAME>/<FIPS>/`
+  (section 10); logs in `results/pipeline_logs/<RUN_NAME>_<step>_<FIPS>.log`.
+
+  Inputs for the counties beyond the 11 shipped here are on Turbo, `/nfs/turbo/coe-alrodri/pkbiswas/`
+  (`populations/`, `data/processed_data/`, `data/population_data/`, `data/networks/covid_output_p0/`).
+  Link a county's population, processed data and `<FIPS>_population.csv` into the same paths here, and point
+  `NETWORKS_DIR_FALLBACK` at the Turbo networks folder rather than copying them (~0.4 GB per county).
+
 ## 3. Calibrate
 
 ```bash
@@ -416,7 +454,7 @@ It writes `seirv_check.csv` (rates, both models' S..V and cases, observed cases)
 SEIRV, observed) and `seirv.png` (S, E, I, R, V: ABM vs SEIRV, and beta) to `--out` (default
 `results/seirv_check/<parent folder>/<FIPS>/`).
 
-**All counties.** `run_counties.py` runs steps 1–3 for every county in `reference_results/` (or `--counties`),
+**All counties.** `run_counties.py` runs steps 1–3 for the counties in `run_settings.COUNTIES` (or `--counties`; section 2),
 skipping a calibration or run that already exists; one line per county, failed counties listed at the end.
 `run_counties.sbatch` splits the counties over 3 GPUs of `alrodri-a100` (needs the links in section 8):
 

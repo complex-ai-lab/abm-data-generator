@@ -23,7 +23,22 @@ CSVS = ("r_t_daily.csv", "seirv_daily.csv", "cases_sim_vs_observed.csv", "seir_r
 def main(run_dir, ref_dir, params_file):
     text = open(os.path.join(run_dir, "config_used.yaml")).read()
     cfg = yaml.safe_load(text)
-    epi, fips = cfg["epidemic"], str(cfg["simulation_metadata"]["POPULATION"])
+    epi = cfg["epidemic"]
+    # config_used.yaml is the raw config, whose POPULATION / population_dir / num_agents are the template
+    # county's (main.py sets them at run time); take the county from the run folder results/<FIPS>/<RUN_NAME>.
+    fips = os.path.basename(os.path.dirname(os.path.abspath(run_dir)))
+    if not re.fullmatch(r"\d{5}", fips):
+        sys.exit(f"[export] cannot read a 5-digit FIPS from {run_dir} (expected results/<FIPS>/<RUN_NAME>)")
+    stages = os.path.join("populations", f"pop{fips}", "disease_stages.csv")
+    if not os.path.exists(stages):
+        sys.exit(f"[export] missing {stages}")
+    with open(stages) as f:
+        n_agents = sum(1 for _ in f) - 1
+    for key, val in (("POPULATION", f"'{fips}'"), ("population_dir", f"populations/pop{fips}"),
+                     ("num_agents", str(n_agents))):
+        text, n = re.subn(rf"(?m)^(  {key}: )\S+", rf"\g<1>{val}", text)
+        if n != 1:
+            sys.exit(f"[export] expected one '  {key}:' line in {run_dir}/config_used.yaml, found {n}")
     params = np.loadtxt(params_file).ravel() if os.path.exists(params_file) else None
 
     def need(name):
