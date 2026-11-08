@@ -7,3 +7,6 @@ __pycache__/
 result_graphs/
 results/
 all_counterfactual_results/
+data/
+populations/
+networks/
